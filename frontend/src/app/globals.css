@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { @apply border-border; }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+  ::selection { @apply bg-blue-500/20; }
+  ::-webkit-scrollbar { @apply w-2; }
+  ::-webkit-scrollbar-track { @apply bg-transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-neutral-800 rounded-full hover:bg-neutral-700; }
+}
+
+@layer components {
+  .glass {
+    @apply bg-neutral-900/70 backdrop-blur-xl border border-neutral-800/50;
+  }
+  .glass-hover {
+    @apply hover:bg-neutral-800/70 transition-colors duration-200;
+  }
+  .card {
+    @apply bg-card border border-border rounded-xl;
+  }
+  .card-hover {
+    @apply card hover:bg-card-hover transition-all duration-200 hover:border-neutral-700;
+  }
+  .input-field {
+    @apply w-full bg-neutral-950 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all duration-200 placeholder:text-muted;
+  }
+  .btn-primary {
+    @apply bg-accent hover:bg-accent-hover text-white font-medium px-4 py-2 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98];
+  }
+  .btn-ghost {
+    @apply hover:bg-neutral-800 text-muted hover:text-foreground px-3 py-2 rounded-lg transition-all duration-200;
+  }
+  .skeleton {
+    @apply bg-neutral-800/50 rounded-lg animate-pulse;
+  }
+  .shimmer {
+    @apply bg-gradient-to-r from-transparent via-neutral-800/20 to-transparent bg-[length:200%_100%] animate-shimmer;
+  }
+  .stat-card {
+    @apply card p-5 transition-all duration-200 hover:border-neutral-700;
+  }
+  .progress-bar {
+    @apply h-1.5 bg-neutral-800 rounded-full overflow-hidden;
+  }
+  .progress-fill {
+    @apply h-full rounded-full transition-all duration-500 ease-out;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400;
+  }
+  .text-gradient-blue {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-cyan-400;
+  }
+}
