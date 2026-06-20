@@ -36,6 +36,8 @@ Thumbs.db
 
 # Project files
 projects/
+*.db
+plan.txt
 
 # Logs
 *.log
