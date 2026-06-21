@@ -150,18 +150,18 @@ async def debug_paths():
                 for r, dirs, files in os.walk(d):
                     for f in sorted(files)[:5]:
                         fp = os.path.join(r, f)
-                        walk_items.append({"file": f, "exists": os.path.exists(fp), "size": os.path.getsize(fp)})
-                    break
-                results[d + "_walk"] = walk_items
+                        try:
+                            sz = os.path.getsize(fp)
+                        except Exception as size_e:
+                            sz = f"err:{size_e}"
+                        walk_items.append({"dir": r, "file": f, "size": sz})
+                    if walk_items:
+                        break
+                results[d + "_walk"] = walk_items if walk_items else "no_files_found_in_first_dir"
+                results[d + "_walk_dir_count"] = len([x for x in os.scandir(d) if x.is_dir()]) if os.path.isdir(d) else -1
+                results[d + "_walk_file_count"] = len([x for x in os.scandir(d) if x.is_file()]) if os.path.isdir(d) else -1
             except Exception as e:
                 results[d + "_walk_error"] = f"{type(e).__name__}: {e}"
-    
-    try:
-        import urllib.parse
-        test_paths = ["Solar System/video/final.mp4", "1_Solar System/video/final.mp4"]
-        results["url_encoded"] = [urllib.parse.quote(p, safe="/") for p in test_paths]
-    except Exception as e:
-        results["url_error"] = str(e)
     
     return results
 
