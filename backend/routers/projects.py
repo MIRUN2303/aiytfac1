@@ -385,8 +385,8 @@ async def list_project_files(project_id: int, db: AsyncSession = Depends(get_db)
                     "modified": mtime,
                     "url": _path_to_url(full_path),
                 })
-    except OSError as e:
+    except Exception as e:
         logger.error("Error listing files for project %d: %s", project_id, e)
-        return {"files": [], "error": str(e)}
+        return {"files": [], "error": str(e), "error_type": type(e).__name__}
 
     return {"files": files_list, "project_dir": project_dir}

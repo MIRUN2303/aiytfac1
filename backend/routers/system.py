@@ -135,6 +135,38 @@ async def get_system_logs(
     return {"logs": logs, "count": len(logs)}
 
 
+@router.get("/debug-paths")
+async def debug_paths():
+    results = {}
+    
+    results["cwd"] = os.getcwd()
+    results["PROJECTS_ROOT"] = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "projects")
+    
+    test_dir = "/projects/1_Photosynthesis"
+    results["test_dir_exists"] = os.path.exists(test_dir)
+    results["test_dir_abspath"] = os.path.abspath(test_dir)
+    
+    if os.path.exists(test_dir):
+        try:
+            items = []
+            for root, dirs, files in os.walk(test_dir):
+                for f in files[:5]:
+                    fp = os.path.join(root, f)
+                    try:
+                        sz = os.path.getsize(fp)
+                    except:
+                        sz = -1
+                    items.append({"file": f, "full_path": fp, "size": sz, "exists": os.path.exists(fp)})
+            results["files"] = items
+        except Exception as e:
+            results["walk_error"] = str(e)
+            
+    import urllib.parse
+    results["url_encode_test"] = urllib.parse.quote("Photosynthesis/video/final.mp4", safe="/")
+    
+    return results
+
+
 @router.get("/health")
 async def detailed_health_check():
     checks = {
