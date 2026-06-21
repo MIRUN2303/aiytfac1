@@ -11,6 +11,7 @@ import {
 const mainLinks = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/guide", label: "Getting Started", icon: BookOpen },
+  { href: "/debug-pipeline", label: "Debug Pipeline", icon: ListVideo },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/queue", label: "Queue", icon: ListVideo },
   { href: "/projects", label: "Projects", icon: FolderOpen },

@@ -403,3 +403,40 @@ async def run_pipeline_step(step: str, topic: str = "Metamorphosis", summary: st
         return {"step": step, "ok": False, "error": str(e), "traceback": __import__("traceback").format_exc()}
 
     return {"error": f"Step {step} not implemented"}
+
+
+class StoryInput(BaseModel):
+    topic: str = "Metamorphosis"
+    summary: str = "Test run step-by-step"
+
+@router.post("/step1-story-scenes")
+async def step1_story_scenes(input: StoryInput):
+    """Step 1: Generate story + scenes (combined). Returns full result for frontend display."""
+    from domain.story_generator import generate_story
+    from domain.scene_generator import generate_scenes
+    try:
+        story = generate_story(input.topic, input.summary, "narrative")
+        scenes = generate_scenes(story, 8)
+        return {
+            "ok": True,
+            "story": {
+                "title": story["title"],
+                "topic": story.get("topic", input.topic),
+                "sections": story.get("sections", story.get("content", [])),
+                "total_duration_s": story.get("total_duration_seconds", 0),
+                "style": story.get("style", "narrative"),
+            },
+            "scenes": [
+                {
+                    "number": s["scene_number"],
+                    "title": s["title"],
+                    "description": s.get("description", "")[:200],
+                    "duration": s["duration_seconds"],
+                    "image_prompt": s.get("image_prompt", ""),
+                    "voice_text": s.get("voice_text", "Narrator: ..."),
+                }
+                for s in scenes
+            ],
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e), "traceback": __import__("traceback").format_exc()}
