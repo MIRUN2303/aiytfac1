@@ -1,5 +1,5 @@
 """Debug/test endpoints — run each pipeline step independently via API."""
-import os, json, asyncio, subprocess, tempfile, logging
+import os, json, asyncio, subprocess, tempfile, logging, base64
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -437,6 +437,50 @@ async def step1_story_scenes(input: StoryInput):
                 }
                 for s in scenes
             ],
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e), "traceback": __import__("traceback").format_exc()}
+
+
+@router.post("/step2-images")
+async def step2_images(input: StoryInput):
+    """Step 2: Generate story + scenes + images. Returns images as base64."""
+
+    async def noop(stage, pct):
+        pass
+
+    from domain.story_generator import generate_story
+    from domain.scene_generator import generate_scenes
+    from domain.image_generator import generate_scene_images
+
+    try:
+        story = generate_story(input.topic, input.summary, "narrative")
+        scenes = generate_scenes(story, 8)
+
+        project_dir = f"/tmp/debug_pipeline/{input.topic.replace(' ', '_')}"
+
+        image_results = await generate_scene_images(scenes, project_dir, noop)
+
+        images = []
+        for r in image_results:
+            img_data = None
+            if r.get("path") and os.path.exists(r["path"]):
+                with open(r["path"], "rb") as f:
+                    raw = f.read()
+                    img_data = "data:image/png;base64," + base64.b64encode(raw).decode()
+            failure = r.get("failed", False) or r.get("placeholder", False)
+            images.append({
+                "scene": r["scene"],
+                "cached": r.get("cached", False),
+                "placeholder": r.get("placeholder", False),
+                "failed": r.get("failed", False),
+                "prompt": r.get("prompt", ""),
+                "image": img_data,
+            })
+
+        return {
+            "ok": True,
+            "images": images,
         }
     except Exception as e:
         return {"ok": False, "error": str(e), "traceback": __import__("traceback").format_exc()}

@@ -1,10 +1,10 @@
 "use client";
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import { motion } from "framer-motion";
 import {
-  ChevronRight, ChevronDown, Play, Loader2, CheckCircle2, XCircle,
-  Clock, RefreshCw, BookOpen, Image, Mic, Subtitles, Film, Smartphone,
-  AlertCircle, Wand2, ArrowRight, Lock, FileText, Sparkles,
+  Play, Loader2, CheckCircle2, XCircle,
+  RefreshCw, BookOpen, Image, Mic, Subtitles, Film, Smartphone,
+  AlertCircle, Wand2, ArrowRight, Lock, FileText, Unlock,
 } from "lucide-react";
 import { toast } from "@/components/Toaster";
 
@@ -31,8 +31,18 @@ interface StepResult {
   ok: boolean;
   story?: StoryResult;
   scenes?: Scene[];
+  images?: ImageResult[];
   error?: string;
   traceback?: string;
+}
+
+interface ImageResult {
+  scene: number;
+  cached: boolean;
+  placeholder: boolean;
+  failed: boolean;
+  prompt: string;
+  image: string | null;
 }
 
 interface StepState {
@@ -40,7 +50,17 @@ interface StepState {
   result?: StepResult;
 }
 
-const PIPELINE_STEPS = [
+interface PipelineStep {
+  id: string;
+  label: string;
+  icon: any;
+  desc: string;
+  color: string;
+  locked?: boolean;
+  needs?: string;  // step id that must be done first
+}
+
+const PIPELINE_STEPS: PipelineStep[] = [
   {
     id: "story-scenes",
     label: "Story & Scenes",
@@ -54,7 +74,7 @@ const PIPELINE_STEPS = [
     icon: Image,
     desc: "Generate scene images via Hugging Face Inference API.",
     color: "from-purple-500 to-pink-500",
-    locked: true,
+    needs: "story-scenes",
   },
   {
     id: "voice",
@@ -105,17 +125,19 @@ function StepCard({
   index,
   state,
   onRun,
+  isUnlocked,
 }: {
-  step: (typeof PIPELINE_STEPS)[0];
+  step: PipelineStep;
   index: number;
   state: StepState;
   onRun: () => void;
+  isUnlocked: boolean;
 }) {
-  const isIdle = state.status === "idle";
   const isRunning = state.status === "running";
   const isDone = state.status === "done";
   const isFailed = state.status === "failed";
-  const disabled = isRunning || step.locked;
+  const isLocked = step.locked || (!isUnlocked && !isDone);
+  const disabled = isRunning || isLocked;
 
   return (
     <motion.div
@@ -127,7 +149,7 @@ function StepCard({
             ? "border-l-red-500"
             : isRunning
               ? "border-l-blue-500"
-              : step.locked
+              : isLocked
                 ? "border-l-neutral-700 opacity-60"
                 : "border-l-neutral-700"
       }`}
@@ -142,13 +164,13 @@ function StepCard({
               <step.icon size={18} className="text-white" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-semibold text-sm">
                   Step {index + 1}: {step.label}
                 </h3>
-                {step.locked && (
+                {isLocked && (
                   <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-400 border border-neutral-700 flex items-center gap-1">
-                    <Lock size={10} /> Coming Soon
+                    <Lock size={10} /> Locked
                   </span>
                 )}
                 {isDone && (
@@ -186,31 +208,21 @@ function StepCard({
             }`}
           >
             {isRunning ? (
-              <>
-                <Loader2 size={14} className="animate-spin" /> Running...
-              </>
+              <><Loader2 size={14} className="animate-spin" /> Running...</>
             ) : isDone ? (
-              <>
-                <RefreshCw size={14} /> Re-run
-              </>
+              <><RefreshCw size={14} /> Re-run</>
             ) : isFailed ? (
-              <>
-                <RefreshCw size={14} /> Retry
-              </>
-            ) : step.locked ? (
-              <>
-                <Lock size={14} /> Locked
-              </>
+              <><RefreshCw size={14} /> Retry</>
+            ) : isLocked ? (
+              <><Lock size={14} /> Locked</>
             ) : (
-              <>
-                <Play size={14} /> Run Step
-              </>
+              <><Play size={14} /> Run Step</>
             )}
           </button>
         </div>
 
-        {/* Results */}
-        {isDone && state.result && state.result.story && (
+        {/* Step 1 Results: Story & Scenes */}
+        {isDone && step.id === "story-scenes" && state.result?.story && (
           <div className="mt-4 space-y-3">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Wand2 size={14} className="text-accent" />
@@ -228,7 +240,7 @@ function StepCard({
                       <th className="text-left py-2 px-2 text-muted font-medium w-12">#</th>
                       <th className="text-left py-2 px-2 text-muted font-medium">Scene</th>
                       <th className="text-left py-2 px-2 text-muted font-medium w-16">Duration</th>
-                      <th className="text-left py-2 px-2 text-muted font-medium w-24">Image Prompt</th>
+                      <th className="text-left py-2 px-2 text-muted font-medium w-36">Image Prompt</th>
                       <th className="text-left py-2 px-2 text-muted font-medium">Voice Text</th>
                     </tr>
                   </thead>
@@ -238,16 +250,14 @@ function StepCard({
                         <td className="py-2 px-2 font-medium">{s.number}</td>
                         <td className="py-2 px-2">
                           <span className="font-medium">{s.title}</span>
-                          {s.description && (
-                            <p className="text-muted mt-0.5 line-clamp-1">{s.description}</p>
-                          )}
+                          {s.description && <p className="text-muted mt-0.5 line-clamp-1">{s.description}</p>}
                         </td>
                         <td className="py-2 px-2 text-muted">{s.duration}s</td>
-                        <td className="py-2 px-2 text-muted max-w-[200px] truncate" title={s.image_prompt}>
+                        <td className="py-2 px-2 text-muted max-w-[250px] truncate" title={s.image_prompt}>
                           {s.image_prompt || "—"}
                         </td>
-                        <td className="py-2 px-2 text-muted max-w-[250px] truncate" title={s.voice_text}>
-                          {s.voice_text?.substring(0, 80) || "—"}
+                        <td className="py-2 px-2 text-muted max-w-[300px] truncate" title={s.voice_text}>
+                          {s.voice_text?.substring(0, 100) || "—"}
                         </td>
                       </tr>
                     ))}
@@ -255,6 +265,47 @@ function StepCard({
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Step 2 Results: Images */}
+        {isDone && step.id === "images" && state.result?.images && (
+          <div className="mt-4">
+            <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-7 gap-2">
+              {state.result.images.map((img) => (
+                <div key={img.scene} className="relative group">
+                  {img.image ? (
+                    <img
+                      src={img.image}
+                      alt={`Scene ${img.scene}`}
+                      className="w-full aspect-video object-cover rounded-lg border border-border/50"
+                    />
+                  ) : (
+                    <div className="w-full aspect-video rounded-lg bg-neutral-800 flex items-center justify-center border border-border/50">
+                      <XCircle size={20} className="text-red-400" />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 rounded-lg bg-black/0 group-hover:bg-black/40 transition-colors flex items-end justify-center">
+                    <span className="text-[10px] font-medium text-white opacity-0 group-hover:opacity-100 mb-1 px-1 bg-black/60 rounded">
+                      Scene {img.scene}
+                      {img.placeholder && " (placeholder)"}
+                      {img.failed && " (failed)"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-3 mt-3 text-xs text-muted">
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-green-500" /> Generated
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-yellow-500" /> Placeholder
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-red-500" /> Failed
+              </span>
+            </div>
           </div>
         )}
 
@@ -295,13 +346,20 @@ export default function DebugPipelinePage() {
     shorts: { status: "idle" },
   });
 
-  const runStep = async (stepId: string) => {
-    if (stepId !== "story-scenes") return;
+  const isUnlocked = (stepId: string) => {
+    const step = PIPELINE_STEPS.find(s => s.id === stepId);
+    if (!step || step.locked) return false;
+    if (!step.needs) return true;
+    return steps[step.needs]?.status === "done";
+  };
 
+  const runStep = async (stepId: string) => {
     setSteps((prev) => ({ ...prev, [stepId]: { status: "running" } }));
 
+    const endpoint = stepId === "images" ? "/debug/step2-images" : "/debug/step1-story-scenes";
+
     try {
-      const res = await fetch(`${API_BASE}/debug/step1-story-scenes`, {
+      const res = await fetch(`${API_BASE}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ topic, summary }),
@@ -310,7 +368,7 @@ export default function DebugPipelinePage() {
 
       if (data.ok) {
         setSteps((prev) => ({ ...prev, [stepId]: { status: "done", result: data } }));
-        toast.success("Story & scenes generated successfully!");
+        toast.success(`${stepId === "images" ? "Images" : "Story & scenes"} generated!`);
       } else {
         setSteps((prev) => ({ ...prev, [stepId]: { status: "failed", result: data } }));
         toast.error(data.error || "Step failed");
@@ -382,7 +440,9 @@ export default function DebugPipelinePage() {
                       ? "bg-red-500/10 text-red-400"
                       : steps[s.id].status === "running"
                         ? "bg-blue-500/10 text-blue-400"
-                        : "bg-neutral-800 text-muted"
+                        : isUnlocked(s.id)
+                          ? "bg-accent/10 text-accent"
+                          : "bg-neutral-800 text-muted"
                 }`}
               >
                 {steps[s.id].status === "done" && <CheckCircle2 size={10} />}
@@ -404,6 +464,7 @@ export default function DebugPipelinePage() {
             step={step}
             index={i}
             state={steps[step.id]}
+            isUnlocked={isUnlocked(step.id)}
             onRun={() => runStep(step.id)}
           />
         ))}
