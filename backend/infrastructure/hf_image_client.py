@@ -13,7 +13,7 @@ HF_API_URL = "https://api-inference.huggingface.co/models"
 DEFAULT_MODEL = "stabilityai/stable-diffusion-xl-base-1.0"
 FALLBACK_MODELS = [
     "black-forest-labs/FLUX.1-schnell",
-    "stabilityai/stable-diffusion-3.5-large-turbo",
+    "stabilityai/stable-diffusion-2-1",
     "runwayml/stable-diffusion-v1-5",
 ]
 
@@ -53,10 +53,11 @@ async def generate_image(
     width: int = 1024,
     height: int = 768,
     model: Optional[str] = None,
-    retries: int = 3,
+    retries: int = 2,
     delay: int = 3,
 ) -> Optional[bytes]:
     token = _get_token()
+    start_time = asyncio.get_event_loop().time()
 
     # Try HF only if token is available
     if token:
@@ -65,6 +66,9 @@ async def generate_image(
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
         }
+
+        # Cache: skip slow models if we've been trying too long
+        TOTAL_TIMEOUT = 55.0
 
         # FLUX.1-schnell uses different payload format
         def _build_payload(model_id: str) -> dict:
@@ -92,11 +96,15 @@ async def generate_image(
         for model_id in models_to_try:
             if model_id is None:
                 continue
+            elapsed = asyncio.get_event_loop().time() - start_time
+            if elapsed > TOTAL_TIMEOUT:
+                logger.info(f"Total timeout ({TOTAL_TIMEOUT}s) exceeded, skipping remaining HF models")
+                break
             url = f"{HF_API_URL}/{model_id}"
             payload = _build_payload(model_id)
             for attempt in range(1, retries + 1):
                 try:
-                    async with httpx.AsyncClient(timeout=120.0) as client:
+                    async with httpx.AsyncClient(timeout=60.0) as client:
                         resp = await client.post(url, headers=headers, json=payload)
 
                         if resp.status_code == 503:
