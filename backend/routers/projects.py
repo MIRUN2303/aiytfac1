@@ -67,7 +67,27 @@ class ProjectResponse(BaseModel):
         return obj
 
 
+PROJECTS_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "projects")
+
+
+def _path_to_url(file_path: Optional[str]) -> Optional[str]:
+    if not file_path:
+        return None
+    if not os.path.exists(file_path):
+        return None
+    try:
+        rel = os.path.relpath(file_path, PROJECTS_ROOT)
+        rel_unix = rel.replace("\\", "/")
+        return f"/static/{rel_unix}"
+    except ValueError:
+        return None
+
+
 def _project_to_response(p) -> dict:
+    video_url = _path_to_url(p.video_path)
+    thumbnail_url = _path_to_url(p.thumbnail_path)
+    short_url = _path_to_url(p.short_path)
+    voice_url = _path_to_url(p.voice_over_path)
     return {
         "id": p.id,
         "topic": p.topic,
@@ -81,6 +101,10 @@ def _project_to_response(p) -> dict:
         "progress": p.progress or 0,
         "project_dir": p.project_dir,
         "video_path": p.video_path,
+        "video_url": video_url,
+        "thumbnail_url": thumbnail_url,
+        "short_url": short_url,
+        "voice_url": voice_url,
         "short_path": p.short_path,
         "thumbnail_path": p.thumbnail_path,
         "voice_over_path": p.voice_over_path,
@@ -202,8 +226,7 @@ async def duplicate_project(project_id: int, db: AsyncSession = Depends(get_db))
         new_dir = new_project.project_dir
         if not new_dir:
             safe_name = "".join(c if c.isalnum() or c in " _-" else "_" for c in original.topic)[:50].strip()
-            new_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "projects",
-                                    f"{new_project.id}_{safe_name}")
+            new_dir = os.path.join(PROJECTS_ROOT, f"{new_project.id}_{safe_name}")
         os.makedirs(new_dir, exist_ok=True)
 
     return _project_to_response(new_project)
@@ -211,7 +234,7 @@ async def duplicate_project(project_id: int, db: AsyncSession = Depends(get_db))
 
 @router.post("/{project_id}/cancel")
 async def cancel_project(project_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Project).where(Project.id == project_id))
+    result = await db.execute(select(Project).Where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(404, "Project not found")
@@ -228,7 +251,7 @@ async def cancel_project(project_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("/{project_id}/archive")
 async def archive_project(project_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Project).where(Project.id == project_id))
+    result = await db.execute(select(Project).Where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(404, "Project not found")
@@ -241,7 +264,7 @@ async def archive_project(project_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("/{project_id}/rerender")
 async def rerender_project(project_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Project).where(Project.id == project_id))
+    result = await db.execute(select(Project).Where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(404, "Project not found")
@@ -268,7 +291,7 @@ async def rerender_project(project_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/{project_id}/download")
 async def download_project(project_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Project).where(Project.id == project_id))
+    result = await db.execute(select(Project).Where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(404, "Project not found")
@@ -314,7 +337,7 @@ async def get_project_logs(project_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/{project_id}/files")
 async def list_project_files(project_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Project).where(Project.id == project_id))
+    result = await db.execute(select(Project).Where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(404, "Project not found")
@@ -331,6 +354,7 @@ async def list_project_files(project_id: int, db: AsyncSession = Depends(get_db)
             size = os.path.getsize(full_path)
             files_list.append({
                 "path": rel_path,
+                "url": _path_to_url(full_path),
                 "size": size,
                 "modified": datetime.fromtimestamp(os.path.getmtime(full_path)).isoformat(),
             })

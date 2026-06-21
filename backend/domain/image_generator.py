@@ -2,8 +2,7 @@ import os
 import asyncio
 import logging
 
-from infrastructure.pollinations_client import generate_image as pollinations_generate
-from infrastructure.puter_client import generate_image as puter_generate
+from infrastructure.hf_image_client import generate_image as hf_generate
 
 logger = logging.getLogger(__name__)
 
@@ -21,16 +20,6 @@ async def generate_scene_images(scenes: list, project_dir: str, progress_callbac
         filename = f"{i + 1:03d}.png"
         filepath = os.path.join(images_dir, filename)
 
-        if prompt in prompt_cache:
-            cached_path = prompt_cache[prompt]
-            import shutil
-            if os.path.exists(cached_path):
-                shutil.copy2(cached_path, filepath)
-                results.append({"scene": i + 1, "path": filepath, "prompt": prompt, "cached": True})
-                if progress_callback:
-                    await progress_callback("GENERATING_IMAGES", int((i + 1) / total * 100))
-                continue
-
         if os.path.exists(filepath):
             results.append({"scene": i + 1, "path": filepath, "prompt": prompt, "cached": True})
             if progress_callback:
@@ -40,17 +29,11 @@ async def generate_scene_images(scenes: list, project_dir: str, progress_callbac
         image_data = None
 
         try:
-            image_data = await pollinations_generate(prompt, seed=i + 1, width=1920, height=1080)
+            image_data = await hf_generate(prompt, seed=i + 1)
         except Exception as e:
-            logger.warning(f"Pollinations failed for scene {i + 1}: {e}")
+            logger.warning(f"HF inference failed for scene {i + 1}: {e}")
 
-        if not image_data:
-            try:
-                image_data = await puter_generate(prompt, seed=i + 1, width=1920, height=1080)
-            except Exception as e:
-                logger.warning(f"Puter fallback failed for scene {i + 1}: {e}")
-
-        if image_data and len(image_data) > 1000:
+        if image_data and len(image_data) > 500:
             with open(filepath, "wb") as f:
                 f.write(image_data)
             results.append({"scene": i + 1, "path": filepath, "prompt": prompt, "cached": False})
@@ -83,11 +66,15 @@ def _generate_placeholder_image(filepath: str, scene_num: int, prompt: str) -> b
         draw = ImageDraw.Draw(img)
 
         try:
-            font_large = ImageFont.truetype("arial.ttf", 48)
-            font_small = ImageFont.truetype("arial.ttf", 24)
+            font_large = ImageFont.truetype("DejaVuSans-Bold.ttf", 48)
+            font_small = ImageFont.truetype("DejaVuSans.ttf", 24)
         except (OSError, IOError):
-            font_large = ImageFont.load_default()
-            font_small = ImageFont.load_default()
+            try:
+                font_large = ImageFont.truetype("arial.ttf", 48)
+                font_small = ImageFont.truetype("arial.ttf", 24)
+            except (OSError, IOError):
+                font_large = ImageFont.load_default()
+                font_small = ImageFont.load_default()
 
         draw.rectangle([0, 0, 1920, 1080], fill=(20, 20, 40))
         draw.rectangle([40, 40, 1880, 1040], outline=(60, 60, 120), width=3)

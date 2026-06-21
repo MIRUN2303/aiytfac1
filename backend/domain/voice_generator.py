@@ -1,12 +1,57 @@
 import os
-import subprocess
+import json
 import logging
 import math
 import struct
-import json
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+VOICE_MAP = {
+    "neutral": "en-US-JennyNeural",
+    "male": "en-US-GuyNeural",
+    "female": "en-US-JennyNeural",
+    "warm": "en-GB-SoniaNeural",
+    "deep": "en-GB-RyanNeural",
+    "soft": "en-US-AriaNeural",
+    "energetic": "en-US-AnaNeural",
+    "calm": "en-GB-LibbyNeural",
+}
+
+
+async def _try_edge_tts(script_text: str, output_path: str, voice_style: str) -> Optional[str]:
+    try:
+        import edge_tts
+
+        voice = VOICE_MAP.get(voice_style, "en-US-JennyNeural")
+        mp3_path = output_path.replace(".wav", ".mp3")
+
+        communicate = edge_tts.Communicate(script_text, voice)
+        await communicate.save(mp3_path)
+
+        if os.path.exists(mp3_path) and os.path.getsize(mp3_path) > 500:
+            import subprocess
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-i", mp3_path, "-acodec", "pcm_s16le",
+                 "-ar", "22050", "-ac", "1", output_path],
+                capture_output=True, text=True, timeout=60,
+            )
+            os.remove(mp3_path)
+            if result.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 500:
+                logger.info(f"Edge TTS generated: {output_path} ({voice})")
+                return output_path
+            else:
+                logger.warning(f"FFmpeg conversion failed: {result.stderr[:200]}")
+                return None
+
+        logger.warning("Edge TTS produced no output")
+        return None
+    except ImportError:
+        logger.warning("edge-tts not installed")
+        return None
+    except Exception as e:
+        logger.warning(f"Edge TTS error: {e}")
+        return None
 
 
 def _generate_wave_file(filepath: str, duration_seconds: float, sample_rate: int = 22050) -> str:
@@ -86,49 +131,6 @@ def _generate_wave_numpy(filepath: str, duration_seconds: float, sample_rate: in
         return filepath
 
 
-async def _try_piper_tts(script_text: str, output_path: str, voice_style: str) -> Optional[str]:
-    try:
-        piper_path = os.environ.get("PIPER_PATH", "piper")
-        voice_model = os.environ.get(
-            "PIPER_VOICE",
-            os.path.join(os.path.dirname(__file__), "..", "..", "models", "voice", "en_US-hfc_male-medium.onnx")
-        )
-
-        if not os.path.exists(voice_model):
-            logger.warning(f"Piper voice model not found: {voice_model}")
-            return None
-
-        temp_txt = output_path.replace(".wav", "_piper_input.txt")
-        with open(temp_txt, "w", encoding="utf-8") as f:
-            f.write(script_text)
-
-        cmd = [
-            piper_path,
-            "--model", voice_model,
-            "--output_file", output_path,
-        ]
-        with open(temp_txt, "r") as f:
-            result = subprocess.run(cmd, stdin=f, capture_output=True, text=True, timeout=120)
-
-        os.remove(temp_txt)
-
-        if result.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 1000:
-            logger.info(f"Piper TTS generated: {output_path}")
-            return output_path
-        else:
-            logger.warning(f"Piper failed: {result.stderr[:200]}")
-            return None
-    except FileNotFoundError:
-        logger.warning("Piper executable not found")
-        return None
-    except subprocess.TimeoutExpired:
-        logger.warning("Piper timed out")
-        return None
-    except Exception as e:
-        logger.warning(f"Piper TTS error: {e}")
-        return None
-
-
 async def generate_voice(scenes: list, project_dir: str, voice_style: str = "neutral", progress_callback=None) -> str:
     voice_dir = os.path.join(project_dir, "voice")
     os.makedirs(voice_dir, exist_ok=True)
@@ -150,11 +152,11 @@ async def generate_voice(scenes: list, project_dir: str, voice_style: str = "neu
     with open(script_path, "w", encoding="utf-8") as f:
         f.write(script_text)
 
-    piper_path = await _try_piper_tts(script_text, output_path, voice_style)
-    if piper_path:
+    edge_path = await _try_edge_tts(script_text, output_path, voice_style)
+    if edge_path:
         if progress_callback:
             await progress_callback("GENERATING_VOICE", 100)
-        return piper_path
+        return edge_path
 
     estimated_duration = total_duration
     _generate_wave_file(output_path, estimated_duration)

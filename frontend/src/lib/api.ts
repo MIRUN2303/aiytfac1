@@ -1,5 +1,12 @@
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+export function getMediaUrl(path: string | null | undefined): string | undefined {
+  if (!path) return undefined;
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  const separator = path.startsWith("/") ? "" : "/";
+  return `${API}${separator}${path}`;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API}${path}`, {
     headers: { "Content-Type": "application/json", ...options?.headers },

@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import {
   Image, Film, Music, FileText, Download, Search, Grid3X3, List,
   FolderOpen, HardDrive, } from "lucide-react";
-import { getProjects, getProjectFiles } from "@/lib/api";
+import { getProjects, getProjectFiles, getMediaUrl } from "@/lib/api";
 import { toast } from "@/components/Toaster";
 
 const container = {
@@ -125,7 +125,7 @@ const MediaPage = () => {
   }, [filtered]);
 
   const handleDownload = (file: any) => {
-    const url = file.url || file.path || file.download_url;
+    const url = getMediaUrl(file.url || file.path || file.download_url);
     if (url) {
       window.open(url, "_blank");
       toast.info("Download started");

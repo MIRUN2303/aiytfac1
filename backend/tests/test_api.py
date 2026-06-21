@@ -115,9 +115,9 @@ async def test_thumbnail_generation(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_pollinations_client():
-    from infrastructure.pollinations_client import generate_image
-    result = await generate_image("a simple test pattern", seed=42, retries=1, delay=0.5)
+async def test_hf_image_client():
+    from infrastructure.hf_image_client import generate_image
+    result = await generate_image("a simple test pattern", retries=1, delay=0.5)
     if result:
         assert len(result) > 0
 

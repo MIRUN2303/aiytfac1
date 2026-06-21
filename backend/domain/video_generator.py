@@ -3,7 +3,6 @@ import subprocess
 import json
 import logging
 import tempfile
-import textwrap
 import asyncio
 
 logger = logging.getLogger(__name__)
@@ -15,21 +14,39 @@ def _get_image_duration(scenes, scene_index, default_duration=5.0):
     return default_duration
 
 
+def _is_valid_image(path: str) -> bool:
+    if not path or not os.path.exists(path):
+        return False
+    ext = os.path.splitext(path)[1].lower()
+    if ext not in (".png", ".jpg", ".jpeg"):
+        return False
+    size = os.path.getsize(path)
+    if size < 500:
+        return False
+    try:
+        from PIL import Image
+        with Image.open(path) as img:
+            img.verify()
+        return True
+    except Exception:
+        return False
+
+
 async def render_video(scenes, image_results, voice_path, subtitle_paths, project_dir, progress_callback=None):
     video_dir = os.path.join(project_dir, "video")
     os.makedirs(video_dir, exist_ok=True)
     output_path = os.path.join(video_dir, "final.mp4")
 
-    images = []
+    valid_images = []
     for r in image_results:
         path = r.get("path")
-        if path and path.lower().endswith((".png", ".jpg", ".jpeg")):
-            images.append(path)
+        if _is_valid_image(path):
+            valid_images.append(path)
 
-    if not images:
+    if not valid_images:
         fallback_path = os.path.join(video_dir, "final.txt")
         with open(fallback_path, "w") as f:
-            f.write("Video generation skipped: no images available\n")
+            f.write("Video generation skipped: no valid images\n")
         if progress_callback:
             await progress_callback("RENDERING", 100)
         return fallback_path
@@ -37,17 +54,14 @@ async def render_video(scenes, image_results, voice_path, subtitle_paths, projec
     if progress_callback:
         await progress_callback("EDITING_VIDEO", 30)
 
-    voice_exists = os.path.exists(voice_path) and os.path.getsize(voice_path) > 100
     created = False
+    voice_exists = voice_path and os.path.exists(voice_path) and os.path.getsize(voice_path) > 500
 
-    if voice_exists and _check_moviepy():
-        created = await _render_with_moviepy(scenes, images, voice_path, subtitle_paths, video_dir, output_path, progress_callback)
-
-    if not created:
-        created = await _render_with_ffmpeg(scenes, images, voice_path, video_dir, output_path, progress_callback)
+    created = await _render_with_ffmpeg(scenes, valid_images, voice_path if voice_exists else None,
+                                        video_dir, output_path, progress_callback)
 
     if not created:
-        created = await _render_with_ffmpeg_simple(images, video_dir, output_path, progress_callback)
+        created = await _render_with_ffmpeg_simple(valid_images, video_dir, output_path, progress_callback)
 
     if progress_callback:
         await progress_callback("RENDERING", 100)
@@ -62,170 +76,69 @@ async def render_video(scenes, image_results, voice_path, subtitle_paths, projec
     return fallback_path
 
 
-def _check_moviepy():
-    try:
-        import moviepy.editor
-        return True
-    except ImportError:
-        return False
-
-
-async def _render_with_moviepy(scenes, images, voice_path, subtitle_paths, video_dir, output_path, progress_callback):
-    try:
-        from moviepy.editor import ImageClip, AudioFileClip, CompositeVideoClip, concatenate_videoclips, TextClip, CompositeAudioClip
-        from moviepy.video.fx import resize
-
-        if progress_callback:
-            await progress_callback("EDITING_VIDEO", 40)
-
-        clips = []
-        for i, img_path in enumerate(images):
-            duration = _get_image_duration(scenes, i)
-            clip = ImageClip(img_path, duration=duration)
-
-            scene_idx = min(i, len(scenes) - 1)
-            scene = scenes[scene_idx] if scene_idx >= 0 else {}
-            movement = scene.get("movement_style", "static")
-
-            if "zoom in" in movement or "push in" in movement or "dolly in" in movement:
-                clip = clip.resize(lambda t: 1 + 0.05 * (t / max(duration, 1)))
-            elif "zoom out" in movement or "pull out" in movement or "pull back" in movement:
-                clip = clip.resize(lambda t: 1.05 - 0.05 * (t / max(duration, 1)))
-            elif "Ken Burns" in movement:
-                clip = clip.resize(lambda t: 1 + 0.03 * (t / max(duration, 1)))
-
-            if "pan right" in movement or "tracking right" in movement:
-                clip = clip.resize(lambda t: 1.1).set_position(lambda t: (-10 * t / max(duration, 1), 0))
-            elif "pan left" in movement or "tracking left" in movement:
-                clip = clip.resize(lambda t: 1.1).set_position(lambda t: (10 * t / max(duration, 1), 0))
-
-            clips.append(clip)
-
-        if progress_callback:
-            await progress_callback("EDITING_VIDEO", 60)
-
-        video = concatenate_videoclips(clips, method="compose")
-
-        if voice_path and os.path.exists(voice_path):
-            try:
-                audio = AudioFileClip(voice_path)
-                if audio.duration < video.duration:
-                    audio = audio.loop(duration=video.duration)
-                video = video.set_audio(audio)
-            except Exception as e:
-                logger.warning(f"Could not add voice audio: {e}")
-
-        if progress_callback:
-            await progress_callback("EDITING_VIDEO", 80)
-
-        has_subtitles = subtitle_paths and subtitle_paths.get("vtt") and os.path.exists(subtitle_paths.get("vtt", ""))
-        if has_subtitles:
-            try:
-                subs = []
-                with open(subtitle_paths["vtt"], "r", encoding="utf-8") as f:
-                    content = f.read()
-
-                import re as regex
-                blocks = regex.split(r"\n\n+", content)
-                for block in blocks:
-                    if "-->" in block and not block.startswith("WEBVTT"):
-                        lines = block.strip().split("\n")
-                        if len(lines) >= 2:
-                            time_part = lines[0]
-                            text_part = "\n".join(lines[1:])
-                            match = regex.match(r"(\d+:\d+:\d+\.\d+)\s*-->\s*(\d+:\d+:\d+\.\d+)", time_part)
-                            if match:
-                                start_str, end_str = match.groups()
-                                start_parts = [float(x) for x in start_str.replace(".", ":").split(":")]
-                                end_parts = [float(x) for x in end_str.replace(".", ":").split(":")]
-                                start_sec = start_parts[0] * 3600 + start_parts[1] * 60 + start_parts[2]
-                                end_sec = end_parts[0] * 3600 + end_parts[1] * 60 + end_parts[2]
-                                duration = end_sec - start_sec
-                                try:
-                                    txt_clip = TextClip(text_part, fontsize=36, color="white",
-                                                        font="Arial", stroke_color="black", stroke_width=2,
-                                                        method="label")
-                                    txt_clip = txt_clip.set_start(start_sec).set_duration(duration).set_position(("center", "bottom"))
-                                    subs.append(txt_clip)
-                                except Exception:
-                                    pass
-
-                if subs:
-                    video = CompositeVideoClip([video] + subs)
-            except Exception as e:
-                logger.warning(f"Could not add subtitles: {e}")
-
-        if progress_callback:
-            await progress_callback("RENDERING", 20)
-
-        video = video.resize(width=1920, height=1080)
-        video.write_videofile(output_path, codec="libx264", audio_codec="aac",
-                              fps=24, preset="medium", bitrate="5000k",
-                              threads=2, logger=None)
-
-        video.close()
-
-        if os.path.exists(output_path) and os.path.getsize(output_path) > 1000:
-            logger.info(f"MoviePy rendered video: {output_path}")
-            return True
-        return False
-    except Exception as e:
-        logger.warning(f"MoviePy rendering failed: {e}")
-        return False
-
-
 async def _render_with_ffmpeg(scenes, images, voice_path, video_dir, output_path, progress_callback):
     try:
         if progress_callback:
             await progress_callback("EDITING_VIDEO", 30)
 
         temp_dir = tempfile.mkdtemp()
-        concat_file = os.path.join(temp_dir, "concat.txt")
 
+        for i, img_path in enumerate(images):
+            duration = _get_image_duration(scenes, i)
+            frame_path = os.path.join(temp_dir, f"frame_{i:04d}.png")
+            try:
+                from PIL import Image
+                img = Image.open(img_path)
+                if img.size != (1920, 1080):
+                    img = img.resize((1920, 1080), Image.LANCZOS)
+                img.save(frame_path, "PNG")
+            except Exception:
+                import shutil
+                shutil.copy2(img_path, frame_path)
+
+        concat_file = os.path.join(temp_dir, "concat.txt")
         with open(concat_file, "w", encoding="utf-8") as f:
             for i, img_path in enumerate(images):
                 duration = _get_image_duration(scenes, i)
-                abs_path = os.path.abspath(img_path).replace("\\", "/").replace(":", "\\\\:")
-                f.write(f"file '{abs_path}'\n")
+                frame_name = f"frame_{i:04d}.png"
+                f.write(f"file '{frame_name}'\n")
                 f.write(f"duration {duration}\n")
-            last_abs = os.path.abspath(images[-1]).replace("\\", "/").replace(":", "\\\\:")
-            f.write(f"file '{last_abs}'\n")
+            last_frame = f"frame_{len(images)-1:04d}.png"
+            f.write(f"file '{last_frame}'\n")
 
-        voice_exists = voice_path and os.path.exists(voice_path) and os.path.getsize(voice_path) > 100
+        has_subtitles = subtitle_paths and subtitle_paths.get("srt") and os.path.exists(subtitle_paths.get("srt", ""))
 
-        if voice_exists:
-            voice_abs = os.path.abspath(voice_path).replace("\\", "/")
-            cmd = [
-                "ffmpeg", "-y",
-                "-f", "concat",
-                "-safe", "0",
-                "-i", concat_file,
-                "-i", voice_abs,
-                "-c:v", "libx264",
-                "-pix_fmt", "yuv420p",
-                "-preset", "medium",
-                "-crf", "23",
-                "-c:a", "aac",
-                "-b:a", "192k",
-                "-shortest",
-                "-r", "24",
-                "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
-                output_path,
-            ]
+        cmd = [
+            "ffmpeg", "-y",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", concat_file,
+        ]
+
+        if voice_path:
+            cmd.extend(["-i", voice_path])
+
+        filter_parts = ["scale=1920:1080,setsar=1"]
+        if has_subtitles:
+            srt_path = os.path.abspath(subtitle_paths["srt"])
+            srt_escaped = srt_path.replace("\\", "/").replace(":", "\\:")
+            filter_parts.append(f"subtitles={srt_escaped}")
+
+        cmd.extend([
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",
+            "-preset", "medium",
+            "-crf", "23",
+            "-vf", ",".join(filter_parts),
+            "-r", "24",
+        ])
+
+        if voice_path:
+            cmd.extend(["-c:a", "aac", "-b:a", "192k", "-shortest"])
         else:
-            cmd = [
-                "ffmpeg", "-y",
-                "-f", "concat",
-                "-safe", "0",
-                "-i", concat_file,
-                "-c:v", "libx264",
-                "-pix_fmt", "yuv420p",
-                "-preset", "medium",
-                "-crf", "23",
-                "-r", "24",
-                "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
-                output_path,
-            ]
+            cmd.extend(["-an"])
+
+        cmd.append(output_path)
 
         if progress_callback:
             await progress_callback("RENDERING", 10)
@@ -239,7 +152,8 @@ async def _render_with_ffmpeg(scenes, images, voice_path, video_dir, output_path
             logger.info(f"FFmpeg rendered video: {output_path}")
             return True
         else:
-            logger.warning(f"FFmpeg failed: {result.stderr[:300]}")
+            stderr_sample = result.stderr[:500] if result.stderr else "no stderr"
+            logger.warning(f"FFmpeg failed (returncode={result.returncode}): {stderr_sample}")
             return False
     except FileNotFoundError:
         logger.warning("FFmpeg not found")
@@ -255,15 +169,26 @@ async def _render_with_ffmpeg(scenes, images, voice_path, video_dir, output_path
 async def _render_with_ffmpeg_simple(images, video_dir, output_path, progress_callback):
     try:
         temp_dir = tempfile.mkdtemp()
-        concat_file = os.path.join(temp_dir, "concat.txt")
 
+        for i, img_path in enumerate(images):
+            frame_path = os.path.join(temp_dir, f"frame_{i:04d}.png")
+            try:
+                from PIL import Image
+                img = Image.open(img_path)
+                if img.size != (1920, 1080):
+                    img = img.resize((1920, 1080), Image.LANCZOS)
+                img.save(frame_path, "PNG")
+            except Exception:
+                import shutil
+                shutil.copy2(img_path, frame_path)
+
+        concat_file = os.path.join(temp_dir, "concat.txt")
         with open(concat_file, "w", encoding="utf-8") as f:
-            for img_path in images:
-                abs_path = os.path.abspath(img_path).replace("\\", "/").replace(":", "\\\\:")
-                f.write(f"file '{abs_path}'\n")
+            for i in range(len(images)):
+                f.write(f"file 'frame_{i:04d}.png'\n")
                 f.write("duration 5\n")
-            last_abs = os.path.abspath(images[-1]).replace("\\", "/").replace(":", "\\\\:")
-            f.write(f"file '{last_abs}'\n")
+            last_frame = f"frame_{len(images)-1:04d}.png"
+            f.write(f"file '{last_frame}'\n")
 
         cmd = [
             "ffmpeg", "-y",
@@ -275,6 +200,8 @@ async def _render_with_ffmpeg_simple(images, video_dir, output_path, progress_ca
             "-preset", "ultrafast",
             "-crf", "28",
             "-r", "24",
+            "-vf", "scale=1920:1080,setsar=1",
+            "-an",
             output_path,
         ]
 
@@ -345,50 +272,31 @@ async def generate_shorts(scenes, image_results, project_dir, progress_callback=
                 img_cropped.save(cropped_path)
 
                 duration = max(scene.get("duration_seconds", 10), 5)
+                temp_dir = tempfile.mkdtemp()
+                concat_file = os.path.join(temp_dir, "short_concat.txt")
+                with open(concat_file, "w") as f:
+                    f.write(f"file 'cropped.png'\n")
+                    f.write(f"duration {duration}\n")
+                    f.write(f"file 'cropped.png'\n")
 
-                if _check_moviepy():
-                    from moviepy.editor import ImageClip, TextClip, CompositeVideoClip
+                import shutil
+                shutil.copy2(cropped_path, os.path.join(temp_dir, "cropped.png"))
 
-                    clip = ImageClip(cropped_path, duration=duration)
-                    clip = clip.resize(lambda t: 1 + 0.02 * (t / max(duration, 1)))
-
-                    narration = scene.get("narration", "")
-                    txt_clip = TextClip(narration[:200], fontsize=48, color="white",
-                                        font="Arial", stroke_color="black", stroke_width=3,
-                                        method="label")
-                    txt_clip = txt_clip.set_position(("center", "bottom")).set_duration(duration)
-
-                    final = CompositeVideoClip([clip, txt_clip], size=(target_w, target_h))
-                    final.write_videofile(output_path, codec="libx264", audio_codec="aac",
-                                          fps=24, preset="medium", bitrate="3000k",
-                                          threads=2, logger=None)
-                    final.close()
-                    short_created = True
-
-                if not short_created:
-                    temp_dir = tempfile.mkdtemp()
-                    concat_file = os.path.join(temp_dir, "short_concat.txt")
-                    abs_path = os.path.abspath(cropped_path).replace("\\", "/").replace(":", "\\\\:")
-                    with open(concat_file, "w") as f:
-                        f.write(f"file '{abs_path}'\n")
-                        f.write(f"duration {duration}\n")
-                        f.write(f"file '{abs_path}'\n")
-
-                    cmd = [
-                        "ffmpeg", "-y",
-                        "-f", "concat", "-safe", "0",
-                        "-i", concat_file,
-                        "-c:v", "libx264",
-                        "-pix_fmt", "yuv420p",
-                        "-preset", "medium",
-                        "-crf", "23",
-                        "-vf", f"scale={target_w}:{target_h}",
-                        output_path,
-                    ]
-                    subprocess.run(cmd, capture_output=True, timeout=300)
-                    import shutil
-                    shutil.rmtree(temp_dir, ignore_errors=True)
-                    short_created = True
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-f", "concat", "-safe", "0",
+                    "-i", concat_file,
+                    "-c:v", "libx264",
+                    "-pix_fmt", "yuv420p",
+                    "-preset", "medium",
+                    "-crf", "23",
+                    "-vf", f"scale={target_w}:{target_h}",
+                    "-an",
+                    output_path,
+                ]
+                subprocess.run(cmd, capture_output=True, timeout=300)
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                short_created = True
             except Exception as e:
                 logger.warning(f"Short video generation failed: {e}")
 
@@ -400,4 +308,4 @@ async def generate_shorts(scenes, image_results, project_dir, progress_callback=
     if progress_callback:
         await progress_callback("GENERATING_SHORTS", 100)
 
-    return output_path if short_created else (fallback if 'fallback' in dir() else os.path.join(shorts_dir, "short.txt"))
+    return output_path if short_created else (fallback if 'fallback' in locals() else os.path.join(shorts_dir, "short.txt"))
