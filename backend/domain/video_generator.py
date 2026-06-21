@@ -122,7 +122,7 @@ async def _render_with_ffmpeg(scenes, images, voice_path, video_dir, output_path
         if has_subtitles:
             srt_path = os.path.abspath(subtitle_paths["srt"])
             srt_escaped = srt_path.replace("\\", "/").replace(":", "\\:")
-            filter_parts.append(f"subtitles={srt_escaped}")
+            filter_parts.append(f"subtitles='{srt_escaped}'")
 
         cmd.extend([
             "-c:v", "libx264",
