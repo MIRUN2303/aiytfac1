@@ -7,7 +7,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from routers import projects, settings, queue, system, plugins, scheduler, uploads
+from routers import projects, settings, queue, system, plugins, scheduler, uploads, debug
 from queue_system import job_queue
 from infrastructure.logging_service import setup_file_logging
 from infrastructure.plugin_manager import plugin_manager
@@ -62,6 +62,7 @@ app.include_router(system.router)
 app.include_router(plugins.router)
 app.include_router(scheduler.router)
 app.include_router(uploads.router)
+app.include_router(debug.router)
 
 projects_dir = os.path.join(os.path.dirname(__file__), "..", "projects")
 os.makedirs(projects_dir, exist_ok=True)
