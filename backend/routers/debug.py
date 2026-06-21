@@ -433,7 +433,7 @@ async def step1_story_scenes(input: StoryInput):
                     "description": s.get("description", "")[:200],
                     "duration": s["duration_seconds"],
                     "image_prompt": s.get("image_prompt", ""),
-                    "voice_text": s.get("voice_text", "Narrator: ..."),
+                    "voice_text": s.get("narration", "Narrator: ..."),
                 }
                 for s in scenes
             ],
