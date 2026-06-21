@@ -1,5 +1,7 @@
 import os
 import json
+import logging
+import urllib.parse
 from typing import Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -10,6 +12,8 @@ from pydantic import BaseModel
 from database import get_db
 from models import Project, JobStatus, Log
 from queue_system import job_queue
+
+logger = logging.getLogger("projects_router")
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -67,19 +71,24 @@ class ProjectResponse(BaseModel):
         return obj
 
 
-PROJECTS_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "projects")
+PROJECTS_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "projects"))
 
 
 def _path_to_url(file_path: Optional[str]) -> Optional[str]:
     if not file_path:
         return None
-    if not os.path.exists(file_path):
-        return None
     try:
-        rel = os.path.relpath(file_path, PROJECTS_ROOT)
+        abs_path = os.path.abspath(file_path)
+        if not os.path.exists(abs_path):
+            return None
+        rel = os.path.relpath(abs_path, PROJECTS_ROOT)
+        if rel.startswith(".."):
+            return None
         rel_unix = rel.replace("\\", "/")
-        return f"/static/{rel_unix}"
-    except ValueError:
+        encoded = urllib.parse.quote(rel_unix, safe="/")
+        return f"/static/{encoded}"
+    except (ValueError, OSError) as e:
+        logger.warning("_path_to_url failed for %s: %s", file_path, e)
         return None
 
 
@@ -346,17 +355,38 @@ async def list_project_files(project_id: int, db: AsyncSession = Depends(get_db)
     if not project_dir or not os.path.exists(project_dir):
         return {"files": []}
 
+    ext_type_map = {
+        ".png": "image", ".jpg": "image", ".jpeg": "image", ".gif": "image", ".webp": "image",
+        ".mp4": "video", ".webm": "video", ".mov": "video",
+        ".mp3": "audio", ".wav": "audio", ".m4a": "audio", ".ogg": "audio",
+        ".srt": "subtitle", ".vtt": "subtitle",
+        ".json": "data", ".txt": "text", ".md": "text",
+        ".zip": "archive",
+    }
+
     files_list = []
-    for root, dirs, files in os.walk(project_dir):
-        for file in files:
-            full_path = os.path.join(root, file)
-            rel_path = os.path.relpath(full_path, project_dir)
-            size = os.path.getsize(full_path)
-            files_list.append({
-                "path": rel_path,
-                "url": _path_to_url(full_path),
-                "size": size,
-                "modified": datetime.fromtimestamp(os.path.getmtime(full_path)).isoformat(),
-            })
+    try:
+        for root, dirs, files in os.walk(project_dir):
+            for file in files:
+                full_path = os.path.join(root, file)
+                rel_path = os.path.relpath(full_path, project_dir)
+                try:
+                    size = os.path.getsize(full_path)
+                    mtime = datetime.fromtimestamp(os.path.getmtime(full_path)).isoformat()
+                except OSError:
+                    continue
+                _, ext = os.path.splitext(file)
+                file_type = ext_type_map.get(ext.lower(), "other")
+                files_list.append({
+                    "filename": file,
+                    "path": rel_path,
+                    "type": file_type,
+                    "size": size,
+                    "modified": mtime,
+                    "url": _path_to_url(full_path),
+                })
+    except OSError as e:
+        logger.error("Error listing files for project %d: %s", project_id, e)
+        return {"files": [], "error": str(e)}
 
     return {"files": files_list, "project_dir": project_dir}
