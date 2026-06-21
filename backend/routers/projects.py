@@ -163,7 +163,7 @@ async def get_projects(
 
 @router.get("/{project_id}")
 async def get_project(project_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Project).Where(Project.id == project_id))
+    result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(404, "Project not found")
@@ -172,7 +172,7 @@ async def get_project(project_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.patch("/{project_id}")
 async def update_project(project_id: int, update: ProjectUpdate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Project).Where(Project.id == project_id))
+    result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(404, "Project not found")
@@ -193,7 +193,7 @@ async def update_project(project_id: int, update: ProjectUpdate, db: AsyncSessio
 
 @router.delete("/{project_id}")
 async def delete_project(project_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Project).Where(Project.id == project_id))
+    result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(404, "Project not found")
@@ -204,14 +204,14 @@ async def delete_project(project_id: int, db: AsyncSession = Depends(get_db)):
         import shutil
         shutil.rmtree(project.project_dir, ignore_errors=True)
 
-    await db.execute(delete(Project).Where(Project.id == project_id))
+    await db.execute(delete(Project).where(Project.id == project_id))
     await db.commit()
     return {"message": "Project deleted"}
 
 
 @router.post("/{project_id}/duplicate")
 async def duplicate_project(project_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Project).Where(Project.id == project_id))
+    result = await db.execute(select(Project).where(Project.id == project_id))
     original = result.scalar_one_or_none()
     if not original:
         raise HTTPException(404, "Project not found")
@@ -243,7 +243,7 @@ async def duplicate_project(project_id: int, db: AsyncSession = Depends(get_db))
 
 @router.post("/{project_id}/cancel")
 async def cancel_project(project_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Project).Where(Project.id == project_id))
+    result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(404, "Project not found")
@@ -260,7 +260,7 @@ async def cancel_project(project_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("/{project_id}/archive")
 async def archive_project(project_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Project).Where(Project.id == project_id))
+    result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(404, "Project not found")
@@ -273,7 +273,7 @@ async def archive_project(project_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("/{project_id}/rerender")
 async def rerender_project(project_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Project).Where(Project.id == project_id))
+    result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(404, "Project not found")
@@ -300,7 +300,7 @@ async def rerender_project(project_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/{project_id}/download")
 async def download_project(project_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Project).Where(Project.id == project_id))
+    result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(404, "Project not found")
@@ -347,7 +347,7 @@ async def get_project_logs(project_id: int, db: AsyncSession = Depends(get_db)):
 @router.get("/{project_id}/filelist")
 async def list_project_files(project_id: int, db: AsyncSession = Depends(get_db)):
     try:
-        result = await db.execute(select(Project).Where(Project.id == project_id))
+        result = await db.execute(select(Project).where(Project.id == project_id))
         project = result.scalar_one_or_none()
         if not project:
             raise HTTPException(404, "Project not found")
@@ -390,3 +390,8 @@ async def list_project_files(project_id: int, db: AsyncSession = Depends(get_db)
         raise
     except Exception as e:
         return {"files": [], "_error": f"{type(e).__name__}: {e}"}
+
+
+# backward-compatible alias
+list_project_files_old = list_project_files
+router.get("/{project_id}/files")(list_project_files_old)
