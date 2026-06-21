@@ -139,29 +139,19 @@ async def get_system_logs(
 async def debug_paths():
     results = {}
     results["cwd"] = os.getcwd()
+    results["file_exists_check"] = os.path.exists("/projects/1_Metamorphosis/video/final.mp4")
+    results["dir_listing"] = [str(x) for x in os.scandir("/projects/1_Metamorphosis")][:20]
     
-    candidates = ["/projects/1_Photosynthesis", "/projects/1_Solar System", "/projects"]
+    candidates = ["/projects/1_Photosynthesis", "/projects/1_Solar System", "/projects/1_Metamorphosis", "/projects"]
     for d in candidates:
         results[d] = os.path.exists(d)
         if os.path.exists(d):
             results[d + "_abspath"] = os.path.abspath(d)
             try:
-                walk_items = []
-                for r, dirs, files in os.walk(d):
-                    for f in sorted(files)[:5]:
-                        fp = os.path.join(r, f)
-                        try:
-                            sz = os.path.getsize(fp)
-                        except Exception as size_e:
-                            sz = f"err:{size_e}"
-                        walk_items.append({"dir": r, "file": f, "size": sz})
-                    if walk_items:
-                        break
-                results[d + "_walk"] = walk_items if walk_items else "no_files_found_in_first_dir"
-                results[d + "_walk_dir_count"] = len([x for x in os.scandir(d) if x.is_dir()]) if os.path.isdir(d) else -1
-                results[d + "_walk_file_count"] = len([x for x in os.scandir(d) if x.is_file()]) if os.path.isdir(d) else -1
+                scan_items = [str(x)[:100] for x in os.scandir(d)][:20]
+                results[d + "_scandir"] = scan_items
             except Exception as e:
-                results[d + "_walk_error"] = f"{type(e).__name__}: {e}"
+                results[d + "_scandir_error"] = f"{type(e).__name__}: {e}"
     
     return results
 

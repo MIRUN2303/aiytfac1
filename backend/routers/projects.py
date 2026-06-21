@@ -365,26 +365,25 @@ async def list_project_files(project_id: int, db: AsyncSession = Depends(get_db)
     }
 
     files_list = []
+    import pathlib
     try:
-        for root, dirs, files in os.walk(project_dir):
-            for file in files:
-                full_path = os.path.join(root, file)
-                rel_path = os.path.relpath(full_path, project_dir)
-                try:
-                    size = os.path.getsize(full_path)
-                    mtime = datetime.fromtimestamp(os.path.getmtime(full_path)).isoformat()
-                except OSError:
-                    continue
-                _, ext = os.path.splitext(file)
-                file_type = ext_type_map.get(ext.lower(), "other")
-                files_list.append({
-                    "filename": file,
-                    "path": rel_path,
-                    "type": file_type,
-                    "size": size,
-                    "modified": mtime,
-                    "url": _path_to_url(full_path),
-                })
+        pdir = pathlib.Path(project_dir)
+        for fp in pdir.rglob("*"):
+            if not fp.is_file():
+                continue
+            rel_path = str(fp.relative_to(pdir)).replace("\\", "/")
+            sz = fp.stat().st_size
+            mtime = datetime.fromtimestamp(fp.stat().st_mtime).isoformat()
+            _, ext = os.path.splitext(fp.name)
+            file_type = ext_type_map.get(ext.lower(), "other")
+            files_list.append({
+                "filename": fp.name,
+                "path": rel_path,
+                "type": file_type,
+                "size": sz,
+                "modified": mtime,
+                "url": _path_to_url(str(fp)),
+            })
     except Exception as e:
         return {"files": [], "_error": str(e), "_error_type": type(e).__name__}
 
