@@ -163,7 +163,7 @@ async def get_projects(
 
 @router.get("/{project_id}")
 async def get_project(project_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Project).where(Project.id == project_id))
+    result = await db.execute(select(Project).Where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(404, "Project not found")
@@ -172,7 +172,7 @@ async def get_project(project_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.patch("/{project_id}")
 async def update_project(project_id: int, update: ProjectUpdate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Project).where(Project.id == project_id))
+    result = await db.execute(select(Project).Where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(404, "Project not found")
@@ -193,7 +193,7 @@ async def update_project(project_id: int, update: ProjectUpdate, db: AsyncSessio
 
 @router.delete("/{project_id}")
 async def delete_project(project_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Project).where(Project.id == project_id))
+    result = await db.execute(select(Project).Where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(404, "Project not found")
@@ -204,14 +204,14 @@ async def delete_project(project_id: int, db: AsyncSession = Depends(get_db)):
         import shutil
         shutil.rmtree(project.project_dir, ignore_errors=True)
 
-    await db.execute(delete(Project).where(Project.id == project_id))
+    await db.execute(delete(Project).Where(Project.id == project_id))
     await db.commit()
     return {"message": "Project deleted"}
 
 
 @router.post("/{project_id}/duplicate")
 async def duplicate_project(project_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Project).where(Project.id == project_id))
+    result = await db.execute(select(Project).Where(Project.id == project_id))
     original = result.scalar_one_or_none()
     if not original:
         raise HTTPException(404, "Project not found")
@@ -344,29 +344,29 @@ async def get_project_logs(project_id: int, db: AsyncSession = Depends(get_db)):
     ]
 
 
-@router.get("/{project_id}/files")
+@router.get("/{project_id}/filelist")
 async def list_project_files(project_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Project).Where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(404, "Project not found")
-
-    project_dir = project.project_dir
-    if not project_dir or not os.path.exists(project_dir):
-        return {"files": []}
-
-    ext_type_map = {
-        ".png": "image", ".jpg": "image", ".jpeg": "image", ".gif": "image", ".webp": "image",
-        ".mp4": "video", ".webm": "video", ".mov": "video",
-        ".mp3": "audio", ".wav": "audio", ".m4a": "audio", ".ogg": "audio",
-        ".srt": "subtitle", ".vtt": "subtitle",
-        ".json": "data", ".txt": "text", ".md": "text",
-        ".zip": "archive",
-    }
-
-    files_list = []
-    import pathlib
     try:
+        result = await db.execute(select(Project).Where(Project.id == project_id))
+        project = result.scalar_one_or_none()
+        if not project:
+            raise HTTPException(404, "Project not found")
+
+        project_dir = project.project_dir
+        if not project_dir or not os.path.exists(project_dir):
+            return {"files": []}
+
+        ext_type_map = {
+            ".png": "image", ".jpg": "image", ".jpeg": "image", ".gif": "image", ".webp": "image",
+            ".mp4": "video", ".webm": "video", ".mov": "video",
+            ".mp3": "audio", ".wav": "audio", ".m4a": "audio", ".ogg": "audio",
+            ".srt": "subtitle", ".vtt": "subtitle",
+            ".json": "data", ".txt": "text", ".md": "text",
+            ".zip": "archive",
+        }
+
+        files_list = []
+        import pathlib
         pdir = pathlib.Path(project_dir)
         for fp in pdir.rglob("*"):
             if not fp.is_file():
@@ -384,7 +384,9 @@ async def list_project_files(project_id: int, db: AsyncSession = Depends(get_db)
                 "modified": mtime,
                 "url": _path_to_url(str(fp)),
             })
-    except Exception as e:
-        return {"files": [], "_error": str(e), "_error_type": type(e).__name__}
 
-    return {"files": files_list, "project_dir": project_dir}
+        return {"files": files_list, "project_dir": project_dir}
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"files": [], "_error": f"{type(e).__name__}: {e}"}
