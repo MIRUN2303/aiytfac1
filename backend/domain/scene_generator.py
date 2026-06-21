@@ -100,7 +100,7 @@ def generate_scenes(story: dict, duration_minutes: int = 8) -> list:
 
         explicit_title = section.get("title", f"Scene {i + 1}")
         content = section.get("content", "")
-        narration = f"{explicit_title}. {content}"
+        narration = content if content else f"{explicit_title}."
 
         subtitle_words = narration.split()
         subtitle = " ".join(subtitle_words[:30]) + ("..." if len(subtitle_words) > 30 else "")

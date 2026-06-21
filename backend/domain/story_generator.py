@@ -101,73 +101,162 @@ def generate_story(topic: str, summary: str, story_style: str = "narrative") -> 
 
     hook = random.choice(HOOK_TEMPLATES).format(topic=safe_topic)
 
+
+
     def generate_section_content(section_title: str) -> str:
         section_name = section_title.split(" - ")[0] if " - " in section_title else section_title
+        concept = (summary or safe_topic).rstrip(".").split(".")[0].strip().rstrip(",")
         content_templates = {
-            "Hook": hook,
-            "Introduction": f"Today we're diving deep into {safe_topic}. {summary or f'This is a fascinating subject that deserves our full attention.'} "
-                           f"We'll explore every aspect and uncover what makes {safe_topic} so important in today's world.",
-            "Overview": f"Let's start with a broad overview of {safe_topic}. This topic encompasses many fascinating aspects "
-                        f"that affect how we understand the world around us. From its origins to its modern-day implications, "
-                        f"there's much to explore and discover.",
-            "Historical Context": f"The history of {safe_topic} dates back further than most people realize. "
-                                  f"Understanding this background is crucial for appreciating its current significance. "
-                                  f"Early developments shaped how we perceive and interact with {safe_topic} today.",
-            "Main Story": f"At the heart of {safe_topic} lies an incredible story. The journey from its beginnings "
-                          f"to its current state is filled with remarkable developments, unexpected turns, "
-                          f"and insights that challenge our conventional understanding.",
-            "Conflict": f"However, {safe_topic} is not without controversy. There are competing perspectives "
-                        f"and ongoing debates that make this subject particularly compelling. "
-                        f"Understanding these tensions is key to grasping the full picture.",
-            "Core Concept": f"The fundamental concept behind {safe_topic} is both simple and profound. "
-                            f"At its core, it teaches us about {summary or 'the interconnected nature of knowledge and discovery'}. "
-                            f"Let's break this down into understandable pieces.",
-            "Climax": f"Everything builds to this moment. The most dramatic revelation about {safe_topic} "
-                      f"is one that changes how we see everything. This is the turning point that makes "
-                      f"this story so unforgettable.",
-            "Key Evidence": f"The evidence supporting our understanding of {safe_topic} is compelling. "
-                            f"Research and discoveries have consistently shown that {safe_topic} "
-                            f"plays a crucial role in {summary or 'shaping our understanding of the world'}.",
-            "Analysis": f"When we analyze {safe_topic} more deeply, patterns emerge that reveal "
-                        f"deeper truths. The implications are far-reaching and affect multiple areas of our lives. "
-                        f"Experts continue to study and debate these findings.",
-            "Examples": f"Let's look at some concrete examples that illustrate {safe_topic}. "
-                        f"These real-world cases demonstrate the principles in action "
-                        f"and help us understand why this matters.",
-            "Deep Dive": f"Going deeper into {safe_topic}, we discover nuances that casual observers miss. "
-                         f"The complexity and richness of this subject reward those who take the time "
-                         f"to truly understand its intricacies.",
-            "Expert Insights": f"Leading experts in the field of {safe_topic} have shared valuable insights. "
-                               f"Their perspectives help us understand the bigger picture and "
-                               f"appreciate the depth of this fascinating subject.",
-            "Common Mistakes": f"Many people misunderstand key aspects of {safe_topic}. "
-                               f"Let's address some of the most common misconceptions and clarify "
-                               f"what the evidence actually tells us.",
-            "Ending": f"As we conclude our exploration of {safe_topic}, we're left with a deeper appreciation "
-                      f"for its significance. The journey through this topic reminds us that "
-                      f"there's always more to learn and discover.",
-            "Summary": f"To summarize what we've learned about {safe_topic}: it's a rich, complex subject "
-                       f"that touches many aspects of our lives. The key takeaways are clear and "
-                       f"demonstrate why this topic deserves our attention.",
-            "Reflection": f"Reflecting on {safe_topic}, we see how it connects to broader themes "
-                          f"in our world. The lessons we've learned here apply far beyond "
-                          f"the subject itself.",
-            "Call to Action": f"If you found this exploration of {safe_topic} valuable, "
-                              f"please like, share, and subscribe for more deep dives. "
-                              f"Let us know in the comments: what aspect of {safe_topic} "
-                              f"would you like us to explore next?",
-            "Practice": f"Now that you understand {safe_topic}, we encourage you to explore further. "
-                        f"There are many resources available for those who want to deepen their knowledge. "
-                        f"Start with the topics we've covered today and build from there.",
-            "Inspiration": f"The story of {safe_topic} reminds us that knowledge is power. "
-                           f"Every great discovery starts with curiosity. Keep asking questions, "
-                           f"keep exploring, and never stop learning.",
+            "Hook": (
+                f"Think about this for a second. {hook} "
+                f"Because the reality is, most people have no idea what {safe_topic} actually means. "
+                f"And that's exactly why you need to hear this — it might change the way you see everything."
+            ),
+            "Introduction": (
+                f"So what is {safe_topic} really about? "
+                f"{concept}. "
+                f"But here's what nobody tells you: it's not just some abstract concept. "
+                f"It shows up in your daily life in ways you've probably never noticed, "
+                f"and once you start paying attention, you'll see it everywhere."
+            ),
+            "Overview": (
+                f"Let's zoom out for a moment. When we look at {safe_topic} from a distance, "
+                f"a pattern emerges. {concept}. "
+                f"This isn't just trivia — understanding this changes how we navigate "
+                f"the world around us, and it's more relevant today than ever before."
+            ),
+            "Historical Context": (
+                f"To really get {safe_topic}, you have to understand where it came from. "
+                f"The roots go deeper than most people realize. "
+                f"Early thinkers wrestled with the same questions we're asking today. "
+                f"The difference? They saw it from a perspective we've lost — "
+                f"and recovering that perspective might be the key to making sense of it all."
+            ),
+            "Main Story": (
+                f"At its core, {safe_topic} tells us something profound about ourselves. "
+                f"{concept}. "
+                f"This isn't just a story about a concept — it's a story about human nature. "
+                f"About the choices we make, the patterns we repeat, and the truths we avoid. "
+                f"And that's what makes it so compelling."
+            ),
+            "Conflict": (
+                f"Now here's where things get uncomfortable. "
+                f"Not everyone agrees on what {safe_topic} actually means. "
+                f"There are real tensions, real contradictions at its heart. "
+                f"{concept}. "
+                f"The conflict isn't a bug — it's the point. "
+                f"Because the things that challenge us are the things that teach us the most."
+            ),
+            "Core Concept": (
+                f"Let me break this down simply. "
+                f"The core idea behind {safe_topic} is actually something you already know intuitively. "
+                f"{concept}. "
+                f"When you strip away all the jargon and complexity, "
+                f"it comes down to a truth that's been staring us in the face the whole time."
+            ),
+            "Climax": (
+                f"Here it is. The moment everything clicks. "
+                f"Because when you really understand {safe_topic}, "
+                f"you realize it's not about the thing itself — it's about us. "
+                f"{concept}. "
+                f"Once you see this, you can't unsee it. "
+                f"This is the turning point that reframes everything we've talked about."
+            ),
+            "Key Evidence": (
+                f"People ask: is this actually real, or is it just theory? "
+                f"The evidence is overwhelming. {concept}. "
+                f"Research consistently shows that {safe_topic} is far more important "
+                f"than most people realize. Study after study points to the same conclusion — "
+                f"and the data is something we can't afford to ignore."
+            ),
+            "Analysis": (
+                f"Let's dig deeper. When you analyze {safe_topic} carefully, "
+                f"something fascinating happens. "
+                f"{concept}. "
+                f"The patterns reveal themselves, and suddenly you see connections "
+                f"you never noticed before — between this topic and your life, "
+                f"between the past and the present, between theory and reality."
+            ),
+            "Examples": (
+                f"Here's where it gets concrete. Think about {safe_topic} in action. "
+                f"{concept}. "
+                f"These aren't hypotheticals — these are real situations that play out every day. "
+                f"Once you know what to look for, you'll start spotting these patterns everywhere."
+            ),
+            "Deep Dive": (
+                f"If you really want to understand {safe_topic}, you have to go beneath the surface. "
+                f"The surface-level takes are easy — everyone has one. "
+                f"But the real insight is in the nuance. {concept}. "
+                f"This is where casual observers check out and true understanding begins."
+            ),
+            "Expert Insights": (
+                f"The people who've spent years studying {safe_topic} all say something similar. "
+                f"{concept}. "
+                f"Experts across different fields keep arriving at the same conclusion, "
+                f"which tells you this isn't just opinion — it's something deeper, "
+                f"something that keeps showing up no matter how you approach it."
+            ),
+            "Common Mistakes": (
+                f"Here's the thing most people get wrong about {safe_topic}. "
+                f"They think it's simple. They think they already understand it. "
+                f"But here's the truth: {concept}. "
+                f"The biggest misconception is the one that keeps us from seeing the truth "
+                f"that's been right in front of us the whole time."
+            ),
+            "Ending": (
+                f"So where does that leave us? "
+                f"{safe_topic} isn't just something you learn once and move on from. "
+                f"{concept}. "
+                f"The question now is: what are you going to do with this understanding? "
+                f"Because knowing and acting are two different things — "
+                f"and the real value is in what you do next."
+                f"\n\nEnding Text on Screen:"
+                f"\n\"Understanding {safe_topic} changes how you see everything.\""
+            ),
+            "Summary": (
+                f"Here's what it all comes down to. "
+                f"{concept}. "
+                f"That's the thread that connects everything we've explored today. "
+                f"It's not complicated — it's just easy to miss when you're not looking for it. "
+                f"Now that you see it, hold onto it."
+            ),
+            "Reflection": (
+                f"Take a moment to think about this. "
+                f"{safe_topic} reflects something about our world that's easy to ignore "
+                f"but impossible to unsee once you notice. {concept}. "
+                f"The lessons here extend far beyond the subject itself — "
+                f"they touch on how we live, how we think, and who we are."
+            ),
+            "Call to Action": (
+                f"If this resonated with you — if {safe_topic} touched something in you — "
+                f"share this with someone who needs to hear it. "
+                f"Drop a comment: what part of this hit closest to home for you? "
+                f"And if you want more deep dives like this, subscribe. "
+                f"We're just getting started."
+            ),
+            "Practice": (
+                f"Don't just take my word for it. Go explore {safe_topic} on your own. "
+                f"{concept}. "
+                f"The best way to really understand is to engage with it directly. "
+                f"Start with what we covered today and see where your curiosity takes you."
+            ),
+            "Inspiration": (
+                f"The real power of {safe_topic} isn't in the facts — it's in what it awakens in us. "
+                f"{concept}. "
+                f"Every great idea starts with someone asking a question. "
+                f"Keep asking. Keep exploring. That curiosity is what moves us forward."
+            ),
         }
         for key, template_text in content_templates.items():
             if key.lower() in section_name.lower() or section_name.lower() in key.lower():
                 return template_text
-        return f"{section_name}: When exploring {safe_topic}, we discover fascinating details that enrich our understanding. " \
-                f"This aspect of the topic reveals important insights about {summary or 'the subject at hand'}."
+        return (
+            f"When you look at {safe_topic} through the right lens, something shifts. "
+            f"{concept}. "
+            f"The {section_name} isn't just a moment in a story — "
+            f"it's a reflection of patterns you've seen in your own life, "
+            f"often without realizing it. That recognition is the whole point."
+        )
 
     sections = []
     total_duration = 0
