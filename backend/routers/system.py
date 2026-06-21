@@ -138,31 +138,30 @@ async def get_system_logs(
 @router.get("/debug-paths")
 async def debug_paths():
     results = {}
-    
     results["cwd"] = os.getcwd()
-    results["PROJECTS_ROOT"] = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "projects")
     
-    test_dir = "/projects/1_Photosynthesis"
-    results["test_dir_exists"] = os.path.exists(test_dir)
-    results["test_dir_abspath"] = os.path.abspath(test_dir)
+    candidates = ["/projects/1_Photosynthesis", "/projects/1_Solar System", "/projects"]
+    for d in candidates:
+        results[d] = os.path.exists(d)
+        if os.path.exists(d):
+            results[d + "_abspath"] = os.path.abspath(d)
+            try:
+                walk_items = []
+                for r, dirs, files in os.walk(d):
+                    for f in sorted(files)[:5]:
+                        fp = os.path.join(r, f)
+                        walk_items.append({"file": f, "exists": os.path.exists(fp), "size": os.path.getsize(fp)})
+                    break
+                results[d + "_walk"] = walk_items
+            except Exception as e:
+                results[d + "_walk_error"] = f"{type(e).__name__}: {e}"
     
-    if os.path.exists(test_dir):
-        try:
-            items = []
-            for root, dirs, files in os.walk(test_dir):
-                for f in files[:5]:
-                    fp = os.path.join(root, f)
-                    try:
-                        sz = os.path.getsize(fp)
-                    except:
-                        sz = -1
-                    items.append({"file": f, "full_path": fp, "size": sz, "exists": os.path.exists(fp)})
-            results["files"] = items
-        except Exception as e:
-            results["walk_error"] = str(e)
-            
-    import urllib.parse
-    results["url_encode_test"] = urllib.parse.quote("Photosynthesis/video/final.mp4", safe="/")
+    try:
+        import urllib.parse
+        test_paths = ["Solar System/video/final.mp4", "1_Solar System/video/final.mp4"]
+        results["url_encoded"] = [urllib.parse.quote(p, safe="/") for p in test_paths]
+    except Exception as e:
+        results["url_error"] = str(e)
     
     return results
 
