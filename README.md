@@ -1,3 +1,13 @@
+---
+title: AI YouTube Factory Backend
+emoji: 🎬
+colorFrom: blue
+colorTo: purple
+sdk: docker
+pinned: false
+app_port: 7860
+---
+
 # AI YouTube Factory 🎬
 
 **Autonomous Content Creation Platform** — Generate cinematic storytelling videos from just a **Topic** and **Summary**.
